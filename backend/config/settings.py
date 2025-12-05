@@ -94,19 +94,42 @@ def get_db_setting(var, fallback):
 DATABASES = {}
 
 DATABASE_URL = os.getenv("DATABASE_URL")
+
+# Prefer psycopg (psycopg3) if possible, fallback to psycopg2 otherwise
+# dj_database_url will produce psycopg2 for ENGINE, so we patch it if needed
+def _prefer_psycopg(db_cfg):
+    if db_cfg.get("ENGINE", "").startswith("django.db.backends.postgresql"):
+        # Prefer psycopg if installed
+        try:
+            import psycopg  # noqa: F401
+            db_cfg["ENGINE"] = "django.db.backends.postgresql"
+        except ImportError:
+            db_cfg["ENGINE"] = "django.db.backends.postgresql_psycopg2"
+    return db_cfg
+
 if DATABASE_URL:
-    DATABASES['default'] = dj_database_url.parse(DATABASE_URL, conn_max_age=600)
+    db_cfg = dj_database_url.parse(DATABASE_URL, conn_max_age=600)
+    db_cfg = _prefer_psycopg(db_cfg)
+    # Ensure sane NAME fallback if not set in URL
+    db_cfg.setdefault("NAME", "notes_db")
+    db_cfg.setdefault("USER", "postgres")
+    db_cfg.setdefault("PASSWORD", "postgres")
+    db_cfg.setdefault("HOST", "localhost")
+    db_cfg.setdefault("PORT", "5432")
+    DATABASES['default'] = db_cfg
 else:
     # Set sensible defaults for running with a typical local PostgreSQL service
-    DATABASES['default'] = {
+    db_cfg = {
         'ENGINE': 'django.db.backends.postgresql',
         # These defaults are compatible with the Kavia-provided Postgres container, and work for local development.
-        'NAME': get_db_setting('DB_NAME', 'postgres'),  # Default DB name 'postgres'
-        'USER': get_db_setting('DB_USER', 'postgres'),  # Default user 'postgres'
-        'PASSWORD': get_db_setting('DB_PASSWORD', ''),  # Default to no password for local/test
-        'HOST': get_db_setting('DB_HOST', 'localhost'), # Postgres container accessible as localhost
-        'PORT': get_db_setting('DB_PORT', '5432'),      # Default Postgres port
+        'NAME': get_db_setting('DB_NAME', 'notes_db'),  # Use 'notes_db' if not set
+        'USER': get_db_setting('DB_USER', 'postgres'),
+        'PASSWORD': get_db_setting('DB_PASSWORD', 'postgres'),
+        'HOST': get_db_setting('DB_HOST', 'localhost'),
+        'PORT': get_db_setting('DB_PORT', '5432'),
     }
+    db_cfg = _prefer_psycopg(db_cfg)
+    DATABASES['default'] = db_cfg
 
 
 # Password validation
