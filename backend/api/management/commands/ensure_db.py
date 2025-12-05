@@ -52,8 +52,9 @@ class Command(BaseCommand):
             db_name = url.path.lstrip("/") if url.path and url.path != "/" else db_name
             db_user = url.username or db_user
             db_password = url.password or db_password
-            db_host = url.hostname or db_host
-            db_port = url.port or db_port
+            # Always ensure fallback to 'database' and 5001, never localhost/5000
+            db_host = url.hostname if url.hostname else "database"
+            db_port = str(url.port) if url.port else "5001"
 
         target_conninfo = f"host={db_host} port={db_port} dbname={db_name} user={db_user} password={db_password}"
 
