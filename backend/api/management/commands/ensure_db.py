@@ -1,5 +1,4 @@
 import os
-import sys
 
 from django.core.management.base import BaseCommand
 from django.db.utils import OperationalError
@@ -17,6 +16,7 @@ class Command(BaseCommand):
     def handle(self, *args, **options):
         import psycopg
         import time
+        import socket
 
         db_name = (
             os.getenv("DB_NAME")
@@ -58,6 +58,18 @@ class Command(BaseCommand):
 
         target_conninfo = f"host={db_host} port={db_port} dbname={db_name} user={db_user} password={db_password}"
 
+        # DNS resolution check
+        try:
+            socket.gethostbyname(db_host)
+        except Exception as dns_exc:
+            self.stdout.write(
+                self.style.WARNING(
+                    f"Database hostname '{db_host}' could not be resolved: {dns_exc}. "
+                    "Skipping database existence check/creation. Ensure the database is available before running migrations."
+                )
+            )
+            return
+
         # Try connect to target DB, if success do nothing
         try:
             with psycopg.connect(target_conninfo, autocommit=True, connect_timeout=2):
@@ -94,8 +106,12 @@ class Command(BaseCommand):
                         time.sleep(2)
                         continue
                     else:
-                        # On last failure, raise error
-                        self.stdout.write(self.style.ERROR(f"Cannot connect to admin DB '{system_db}' ({conn_exc})"))
+                        self.stdout.write(
+                            self.style.ERROR(
+                                f"Cannot connect to admin DB '{system_db}' ({conn_exc}). "
+                                "If database is not available yet, run this command again later."
+                            )
+                        )
             # Try next system DB
         self.stdout.write(self.style.ERROR(f"Exhausted all admin DBs. Could not connect to create database '{db_name}'."))
-        sys.exit(1)
+        # Do not sys.exit(1); just warn but allow migration or manage.py to continue.
