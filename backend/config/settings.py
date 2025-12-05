@@ -15,9 +15,7 @@ from pathlib import Path
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
 
-
-# Quick-start development settings - unsuitable for production
-# See https://docs.djangoproject.com/en/5.2/howto/deployment/checklist/
+import os
 
 # SECURITY WARNING: keep the secret key used in production secret!
 SECRET_KEY = 'django-insecure-0ku_as45vs5isd^px=t#m8g#^*x7f=w#gw-xb^t@^-pom)r^t6'
@@ -31,7 +29,6 @@ ALLOWED_HOSTS = [
     '127.0.0.1',
     'testserver',
 ]
-
 
 # Application definition
 
@@ -80,72 +77,77 @@ TEMPLATES = [
 WSGI_APPLICATION = 'config.wsgi.application'
 
 
-# Database
-# https://docs.djangoproject.com/en/5.2/ref/settings/#databases
+# --- DATABASE CONFIGURATION ---
 
-import os
+def _env(var, fallback):
+    v = os.getenv(var)
+    if v is not None:
+        return v
+    # Accept legacy POSTGRES_* fallback
+    legacy_v = os.getenv('POSTGRES_' + var[3:]) if var.startswith("DB_") else None
+    if legacy_v is not None:
+        return legacy_v
+    return fallback
 
-import dj_database_url
+DB_DEFAULTS = {
+    "DB_NAME": "notes_db",
+    "DB_USER": "postgres",
+    "DB_PASSWORD": "postgres",
+    "DB_HOST": "database",      # Critical: Never default to localhost!
+    "DB_PORT": "5001",          # Critical: Never default to 5432 or 5000!
+}
 
-def get_db_setting(var, fallback):
-    # Lookup DB_* first, fallback to legacy POSTGRES_*, then use hardcoded default
-    # For DB_HOST default to "database", port 5001 for all deployments
-    defaults = {
-        "DB_NAME": "notes_db",
-        "DB_USER": "postgres",
-        "DB_PASSWORD": "postgres",
-        "DB_HOST": "database",
-        "DB_PORT": "5001"
-    }
-    # Enforce that DB_HOST and DB_PORT never default to localhost or 5000
-    value = os.environ.get(var)
-    if value:
-        return value
-    legacy_value = os.environ.get('POSTGRES_' + var[3:])
-    if legacy_value:
-        return legacy_value
-    return defaults.get(var, fallback)
+def _get_db_env(key):
+    return _env(key, DB_DEFAULTS[key])
 
+# Compose DB config dict, but DO NOT IMPORT OR CONNECT AT STARTUP (no socket, no psycopg, etc)
 DATABASES = {}
 
 DATABASE_URL = os.getenv("DATABASE_URL")
-
-# Prefer psycopg (psycopg3) if possible, fallback to psycopg2 otherwise
-# dj_database_url will produce psycopg2 for ENGINE, so we patch it if needed
-def _prefer_psycopg(db_cfg):
-    if db_cfg.get("ENGINE", "").startswith("django.db.backends.postgresql"):
-        # Prefer psycopg if installed
-        try:
-            import psycopg  # noqa: F401
-            db_cfg["ENGINE"] = "django.db.backends.postgresql"
-        except ImportError:
-            db_cfg["ENGINE"] = "django.db.backends.postgresql_psycopg2"
-    return db_cfg
-
 if DATABASE_URL:
+    # Prefer dj_database_url if DATABASE_URL is set, but do not connect or resolve host
+    import dj_database_url
     db_cfg = dj_database_url.parse(DATABASE_URL, conn_max_age=600)
+    # Patch engine to prefer psycopg v3 if installed, else fallback to psycopg2
+    def _prefer_psycopg(db_cfg):
+        if db_cfg.get("ENGINE", "").startswith("django.db.backends.postgresql"):
+            # Only try import once and avoid shadowing
+            try:
+                import psycopg  # noqa: F401
+            except ImportError:
+                db_cfg["ENGINE"] = "django.db.backends.postgresql_psycopg2"
+            else:
+                db_cfg["ENGINE"] = "django.db.backends.postgresql"
+        return db_cfg
     db_cfg = _prefer_psycopg(db_cfg)
-    # Ensure sane NAME fallback if not set in URL
-    db_cfg.setdefault("NAME", "notes_db")
-    db_cfg.setdefault("USER", "postgres")
-    db_cfg.setdefault("PASSWORD", "postgres")
-    db_cfg.setdefault("HOST", "localhost")
-    db_cfg.setdefault("PORT", "5432")
+    db_cfg.setdefault("NAME", DB_DEFAULTS["DB_NAME"])
+    db_cfg.setdefault("USER", DB_DEFAULTS["DB_USER"])
+    db_cfg.setdefault("PASSWORD", DB_DEFAULTS["DB_PASSWORD"])
+    db_cfg.setdefault("HOST", DB_DEFAULTS["DB_HOST"])
+    db_cfg.setdefault("PORT", DB_DEFAULTS["DB_PORT"])
     DATABASES['default'] = db_cfg
 else:
-    # Set sensible defaults for running with a typical local PostgreSQL service
     db_cfg = {
         'ENGINE': 'django.db.backends.postgresql',
-        # These defaults are compatible with the Kavia-provided Postgres container, and work for local development.
-        'NAME': get_db_setting('DB_NAME', 'notes_db'),  # Use 'notes_db' if not set
-        'USER': get_db_setting('DB_USER', 'postgres'),
-        'PASSWORD': get_db_setting('DB_PASSWORD', 'postgres'),
-        'HOST': get_db_setting('DB_HOST', 'localhost'),
-        'PORT': get_db_setting('DB_PORT', '5432'),
+        'NAME': _get_db_env('DB_NAME'),
+        'USER': _get_db_env('DB_USER'),
+        'PASSWORD': _get_db_env('DB_PASSWORD'),
+        'HOST': _get_db_env('DB_HOST'),
+        'PORT': _get_db_env('DB_PORT'),
     }
-    db_cfg = _prefer_psycopg(db_cfg)
+    def _prefer_psycopg_simple(db_cfg):
+        try:
+            import psycopg  # noqa: F401
+        except ImportError:
+            db_cfg['ENGINE'] = 'django.db.backends.postgresql_psycopg2'
+        else:
+            db_cfg['ENGINE'] = 'django.db.backends.postgresql'
+        return db_cfg
+    db_cfg = _prefer_psycopg_simple(db_cfg)
     DATABASES['default'] = db_cfg
+# DO NOT VALIDATE, RESOLVE, or CONNECT HERE
 
+# --- END DATABASE CONFIGURATION ---
 
 # Password validation
 # https://docs.djangoproject.com/en/5.2/ref/settings/#auth-password-validators
@@ -165,18 +167,13 @@ AUTH_PASSWORD_VALIDATORS = [
     },
 ]
 
-
 # Internationalization
 # https://docs.djangoproject.com/en/5.2/topics/i18n/
 
 LANGUAGE_CODE = 'en-us'
-
 TIME_ZONE = 'UTC'
-
 USE_I18N = True
-
 USE_TZ = True
-
 
 # Static files (CSS, JavaScript, Images)
 # https://docs.djangoproject.com/en/5.2/howto/static-files/
@@ -185,7 +182,6 @@ STATIC_URL = 'static/'
 
 # Default primary key field type
 # https://docs.djangoproject.com/en/5.2/ref/settings/#default-auto-field
-
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
 CORS_ALLOW_ALL_ORIGINS = True

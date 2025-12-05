@@ -15,6 +15,7 @@ def main():
             "available on your PYTHONPATH environment variable? Did you "
             "forget to activate a virtual environment?"
         ) from exc
+    # No ensure_db, no shell out, no network/DB logic here.
     execute_from_command_line(sys.argv)
 
 
