@@ -97,13 +97,15 @@ DATABASE_URL = os.getenv("DATABASE_URL")
 if DATABASE_URL:
     DATABASES['default'] = dj_database_url.parse(DATABASE_URL, conn_max_age=600)
 else:
+    # Set sensible defaults for running with a typical local PostgreSQL service
     DATABASES['default'] = {
         'ENGINE': 'django.db.backends.postgresql',
-        'NAME': get_db_setting('DB_NAME', ''),
-        'USER': get_db_setting('DB_USER', ''),
-        'PASSWORD': get_db_setting('DB_PASSWORD', ''),
-        'HOST': get_db_setting('DB_HOST', 'localhost'),
-        'PORT': get_db_setting('DB_PORT', '5432'),
+        # These defaults are compatible with the Kavia-provided Postgres container, and work for local development.
+        'NAME': get_db_setting('DB_NAME', 'postgres'),  # Default DB name 'postgres'
+        'USER': get_db_setting('DB_USER', 'postgres'),  # Default user 'postgres'
+        'PASSWORD': get_db_setting('DB_PASSWORD', ''),  # Default to no password for local/test
+        'HOST': get_db_setting('DB_HOST', 'localhost'), # Postgres container accessible as localhost
+        'PORT': get_db_setting('DB_PORT', '5432'),      # Default Postgres port
     }
 
 
