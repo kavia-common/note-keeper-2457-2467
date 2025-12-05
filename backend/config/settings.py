@@ -85,16 +85,26 @@ WSGI_APPLICATION = 'config.wsgi.application'
 
 import os
 
-DATABASES = {
-    'default': {
+import dj_database_url
+
+def get_db_setting(var, fallback):
+    # Lookup DB_* first, fallback to legacy POSTGRES_*, then use hardcoded default
+    return os.environ.get(var, os.environ.get('POSTGRES_' + var[3:], fallback))
+
+DATABASES = {}
+
+DATABASE_URL = os.getenv("DATABASE_URL")
+if DATABASE_URL:
+    DATABASES['default'] = dj_database_url.parse(DATABASE_URL, conn_max_age=600)
+else:
+    DATABASES['default'] = {
         'ENGINE': 'django.db.backends.postgresql',
-        'NAME': os.environ.get('POSTGRES_DB', ''),
-        'USER': os.environ.get('POSTGRES_USER', ''),
-        'PASSWORD': os.environ.get('POSTGRES_PASSWORD', ''),
-        'HOST': os.environ.get('POSTGRES_URL', 'localhost'),
-        'PORT': os.environ.get('POSTGRES_PORT', '5432'),
+        'NAME': get_db_setting('DB_NAME', ''),
+        'USER': get_db_setting('DB_USER', ''),
+        'PASSWORD': get_db_setting('DB_PASSWORD', ''),
+        'HOST': get_db_setting('DB_HOST', 'localhost'),
+        'PORT': get_db_setting('DB_PORT', '5432'),
     }
-}
 
 
 # Password validation
