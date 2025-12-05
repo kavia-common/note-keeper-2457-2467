@@ -1,0 +1,4 @@
+{
+    "command": "source venv/bin/activate && python manage.py migrate && python manage.py runserver <host>:<port>",
+    "working_directory": "/tmp/kavia/workspace/code-generation/note-keeper-2457-2467/backend"
+}

@@ -1,0 +1,4 @@
+{
+    "command": "source venv/bin/activate && pip install -r requirements.txt",
+    "working_directory": "/tmp/kavia/workspace/code-generation/note-keeper-2457-2467/backend"
+}
