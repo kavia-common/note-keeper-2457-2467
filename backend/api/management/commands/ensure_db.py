@@ -7,8 +7,10 @@ from django.db.utils import OperationalError
 class Command(BaseCommand):
     """
     Ensures that the configured PostgreSQL database exists.
-    Connects to the 'postgres' system database if necessary and attempts to create the target DB if missing.
-    Must run before migration commands.
+
+    WARNING: This logic is ONLY executed as an explicit management command!
+    Database socket, psycopg and DNS checks are never run at import/startup,
+    only when this command is explicitly invoked.
     """
 
     help = "Ensures that the configured PostgreSQL database exists, creating it if necessary."
@@ -58,7 +60,7 @@ class Command(BaseCommand):
 
         target_conninfo = f"host={db_host} port={db_port} dbname={db_name} user={db_user} password={db_password}"
 
-        # DNS resolution check
+        # This check is only done in this command (never at import), and will NOT stop migrations, only warn and exit early.
         try:
             socket.gethostbyname(db_host)
         except Exception as dns_exc:

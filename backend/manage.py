@@ -1,5 +1,10 @@
 #!/usr/bin/env python
-"""Django's command-line utility for administrative tasks."""
+"""Django's command-line utility for administrative tasks.
+
+No database connection, DNS or psycopg/network logic is run at process startup/import time.
+All DB logic is strictly deferred to inside explicit commands (e.g., migrate, custom management).
+"""
+
 import os
 import sys
 
@@ -15,7 +20,8 @@ def main():
             "available on your PYTHONPATH environment variable? Did you "
             "forget to activate a virtual environment?"
         ) from exc
-    # No ensure_db, no shell out, no network/DB logic here.
+    # CRITICAL: Do not perform any DB logic, health checks, or network access here.
+    # Only run Django main management command machinery.
     execute_from_command_line(sys.argv)
 
 

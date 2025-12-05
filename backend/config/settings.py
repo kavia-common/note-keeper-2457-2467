@@ -79,6 +79,12 @@ WSGI_APPLICATION = 'config.wsgi.application'
 
 # --- DATABASE CONFIGURATION ---
 
+# CRITICAL:
+# - This section must NEVER import psycopg or socket or perform any direct/indirect host or net resolution.
+# - No database connection, DNS check, or network activity occurs at settings import time.
+# - All configuration is based purely on environment variables, with safe Docker-style fallbacks.
+# - dj-database-url is only used if DATABASE_URL is present, and performs zero connection or host validation at parse time.
+
 def _env(var, fallback):
     v = os.getenv(var)
     if v is not None:
@@ -100,15 +106,16 @@ DB_DEFAULTS = {
 def _get_db_env(key):
     return _env(key, DB_DEFAULTS[key])
 
-# Compose DB config dict, but DO NOT IMPORT OR CONNECT AT STARTUP (no socket, no psycopg, etc)
+# Compose DB config dict, but DO NOT IMPORT OR CONNECT AT STARTUP (no socket, no psycopg, etc).
 DATABASES = {}
 
 DATABASE_URL = os.getenv("DATABASE_URL")
 if DATABASE_URL:
-    # Prefer dj_database_url if DATABASE_URL is set, but do not connect or resolve host
+    # Parse from dj-database-url if and only if DATABASE_URL is present.
+    # Import here, but parsing is guaranteed not to connect to the network or resolve hosts.
     import dj_database_url
     db_cfg = dj_database_url.parse(DATABASE_URL, conn_max_age=600)
-    # Patch engine to prefer psycopg v3 if installed, else fallback to psycopg2
+    # Patch engine to prefer psycopg v3 if installed, else fallback to psycopg2.
     def _prefer_psycopg(db_cfg):
         if db_cfg.get("ENGINE", "").startswith("django.db.backends.postgresql"):
             # Only try import once and avoid shadowing
@@ -145,7 +152,8 @@ else:
         return db_cfg
     db_cfg = _prefer_psycopg_simple(db_cfg)
     DATABASES['default'] = db_cfg
-# DO NOT VALIDATE, RESOLVE, or CONNECT HERE
+# CRITICAL: DO NOT VALIDATE, RESOLVE, or CONNECT HERE (settings import time).
+# Do not add socket.gethostbyname, connection tests, or anything except environment sniffing and parse logic.
 
 # --- END DATABASE CONFIGURATION ---
 
