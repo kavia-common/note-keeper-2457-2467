@@ -89,7 +89,15 @@ import dj_database_url
 
 def get_db_setting(var, fallback):
     # Lookup DB_* first, fallback to legacy POSTGRES_*, then use hardcoded default
-    return os.environ.get(var, os.environ.get('POSTGRES_' + var[3:], fallback))
+    # For DB_HOST default to "database" for Docker/Kavia, port 5001
+    defaults = {
+        "DB_NAME": "notes_db",
+        "DB_USER": "postgres",
+        "DB_PASSWORD": "postgres",
+        "DB_HOST": "database",   # Default for container environment
+        "DB_PORT": "5001"        # Kavia preview port
+    }
+    return os.environ.get(var, os.environ.get('POSTGRES_' + var[3:], defaults.get(var, fallback)))
 
 DATABASES = {}
 
